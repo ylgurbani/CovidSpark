@@ -1,6 +1,6 @@
 from pyspark import SparkFiles
 from pyspark.sql.functions import array, col, explode, struct, lit
-
+from pyspark.sql.window import Window
 
 def get_df():
 
@@ -20,3 +20,11 @@ def get_df():
 
 	input_df = input_df.select(index_columns + [transpose_columns]).select(index_columns + ["transpose_columns.date", "transpose_columns.cases"])
 	return input_df
+
+test_df = get_df()
+
+w =  Window.partitionBy(test_df.country).orderBy(test_df.country)
+
+daily_case_df = test_df.withColumn("diff", col("cases") - when((lag("cases", 1).over(w)).isNull(), test_df.head().cases)
+                   .otherwise(lag("cases", 1).over(w)))
+daily_case_df.show()

@@ -35,3 +35,13 @@ def find_monthly_avg_cases(df):
 test_df = get_df()
 
 find_monthly_avg_cases(test_df)
+
+def join_continent_data(df):
+    spark = SparkSession.builder.getOrCreate()
+    Continent_df = spark.read.format("csv").option("header", "true").load('Continent_Data.csv')
+    Continent_Merge_df = df.join(Continent_df, on=['country'], how='outer')
+    cols = ("No", "ISO-alpha3 Code", "M49 Code", "Region 1", "Region 2")
+    Continent_Merge_df = Continent_Merge_df.drop(*cols).select("Continent", "country", "province", "Lat", "Long", "date", "cases", "daily_cases")
+    return Continent_Merge_df
+
+test_merge = join_continent_data(test_df)

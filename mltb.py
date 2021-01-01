@@ -6,7 +6,6 @@ from pyspark.sql.types import *
 from pyspark.sql import SparkSession, SQLContext, Window
 
 def get_df():
-
 	file_url = 'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv'
 	spark.sparkContext.addFile(file_url)
 
@@ -22,9 +21,23 @@ def get_df():
 	transpose_columns = explode(array([struct(lit(c).alias("date"), col(c).alias("cases")) for c in columns])).alias("transpose_columns")
 
 	input_df = input_df.select(index_columns + [transpose_columns]).select(index_columns + ["transpose_columns.date", "transpose_columns.cases"])
+	input_df = input_df.withColumn('date', to_date(input_df.date, 'M/d/yy'))
+	
+	window_spec = Window.partitionBy("country").orderBy("date")
+	input_df = input_df.withColumn("daily_cases", input_df.cases - when(F.lag(input_df.cases).over(window_spec).isNull(),0).otherwise(F.lag(input_df.cases).over(window_spec)))
+	
 	return input_df
 
+
+def find_monthly_avg_cases(df):
+	monthly_df = df.withColumn('month', date_format(df.date,'yyyy-MM'))
+	monthly_df = monthly_df.groupBy('month','country').agg(avg('daily_cases').alias('avg_cases')).orderBy('avg_cases', ascending=False)
+	monthly_df.show()
+
+
 test_df = get_df()
+
+find_monthly_avg_cases(test_df)
 
 test_df.createOrReplaceTempView("Pre_Dataset")
 

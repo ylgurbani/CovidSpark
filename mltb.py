@@ -9,7 +9,6 @@ def get_df():
 	file_url = 'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv'
 	spark.sparkContext.addFile(file_url)
 
-
 	input_df = spark.read.csv(SparkFiles.get("time_series_covid19_confirmed_global.csv"), header=True)
 
 	input_df = input_df.withColumnRenamed('Province/State','province').withColumnRenamed('Country/Region','country')
@@ -28,33 +27,11 @@ def get_df():
 	
 	return input_df
 
-
 def find_monthly_avg_cases(df):
 	monthly_df = df.withColumn('month', date_format(df.date,'yyyy-MM'))
-	monthly_df = monthly_df.groupBy('month','country').agg(avg('daily_cases').alias('avg_cases')).orderBy('avg_cases', ascending=False)
+	monthly_df = monthly_df.groupBy('country','month').agg(avg('daily_cases').alias('avg_cases')).orderBy('country', 'month')
 	monthly_df.show()
-
 
 test_df = get_df()
 
 find_monthly_avg_cases(test_df)
-
-test_df.createOrReplaceTempView("Pre_Dataset")
-
-df_with_null = spark.sql('SELECT *, cases - LAG(cases) OVER(PARTITION BY (CASE WHEN province IS NOT NULL THEN province \
-                                                                               ELSE country END) \
-                                                            ORDER BY (CASE WHEN province IS NOT NULL THEN province \
-                                                                           ELSE country END)) AS Null_daily_Cases \
-                          FROM Pre_Dataset')
-
-df_with_null.createOrReplaceTempView("Null_Case_DF")
-
-daily_case_df = spark.sql('SELECT *, CASE WHEN Null_Daily_cases IS NOT NULL THEN Null_Daily_Cases ELSE 0 END AS Daily_Cases \
-                           FROM Null_Case_DF')
-
-daily_case_df.createOrReplaceTempView("Daily_Case_DF")
-
-#test to see if UK province daily cases show correctly
-spark.sql('SELECT * \
-           FROM Daily_Case_DF \
-           WHERE country ="United Kingdom" AND province IS NULL').show()

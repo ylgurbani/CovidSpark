@@ -23,7 +23,7 @@ def get_df():
 	input_df = input_df.select(index_columns + [transpose_columns]).select(index_columns + ["transpose_columns.date", "transpose_columns.cases"])
 	input_df = input_df.withColumn('date', to_date(input_df.date, 'M/d/yy'))
 	
-	window_spec = Window.partitionBy("country").orderBy("date")
+	window_spec = Window.partitionBy("country", "province").orderBy("date")
 	input_df = input_df.withColumn("daily_cases", input_df.cases - when(F.lag(input_df.cases).over(window_spec).isNull(),0).otherwise(F.lag(input_df.cases).over(window_spec)))
 	
 	return input_df

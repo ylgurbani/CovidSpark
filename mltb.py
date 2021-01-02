@@ -45,3 +45,12 @@ def join_continent_data(df):
     return Continent_Merge_df
 
 test_merge = join_continent_data(test_df)
+
+def find_week_nums(df):    
+    """Assigns a week number to each row based on the date
+    Input: merged dataset with continents
+    Output: dataset with the week numbers
+    """
+    weekly_df = df.withColumn('week_no', weekofyear(df.date)).select("Continent", "country", "province", "date", "cases", "daily_cases", "week_no")
+    weekly_df = weekly_df.withColumn('week_no', weekly_df.week_no - (weekly_df.collect()[0]['week_no'] - 1))
+    return weekly_df

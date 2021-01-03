@@ -34,9 +34,10 @@ def find_monthly_avg_cases(df):
 	monthly_df = monthly_df.groupBy('country','month').agg(avg('daily_cases').alias('avg_cases')).orderBy('country', 'month')
 	monthly_df.show()
 
-test_df = get_df()
-
-find_monthly_avg_cases(test_df)
+def get_slope(x,y,order=1):
+    coeffs = np.polyfit(x, y, order)
+    slope = coeffs[-2]
+    return float(slope)
 
 def join_continent_data(df):
     spark = SparkSession.builder.getOrCreate()
@@ -45,8 +46,6 @@ def join_continent_data(df):
     cols = ("No", "ISO-alpha3 Code", "M49 Code", "Region 1", "Region 2")
     Continent_Merge_df = Continent_Merge_df.drop(*cols).select("Continent", "country", "province", "date", "cases", "daily_cases")
     return Continent_Merge_df
-
-test_merge = join_continent_data(test_df)
 
 def find_week_nums(df):    
     """Assigns a week number to each row based on the date
@@ -57,7 +56,17 @@ def find_week_nums(df):
     weekly_df = weekly_df.withColumn('week_no', weekly_df.week_no - (weekly_df.collect()[0]['week_no'] - 1))
     return weekly_df
 
-
 def get_slope_df(df):
+	get_slope = F.udf(get_slope, returnType=DoubleType())
+	shift_days = F.udf(shift_days, ArrayType(IntegerType()))
 	df_with_week_days = df.withColumn("week", weekofyear(df.date)).withColumn("day", dayofweek(df.date)).withColumn('province_or_country',coalesce('province','country'))
-	df_array_values = df_with_week_days.orderBy('day').groupBy('province_or_country','week').agg(collect_list('daily_cases').alias('daily_cases'), collect_list('day').alias('days'))
+	df_array_values = df_with_week_days.orderBy('province_or_country','week','date').groupBy('province_or_country','week').agg(collect_list('daily_cases').alias('daily_cases'), collect_list('day').alias('days'))
+	return df_array_values.withColumn('slope', get_slope(F.col('days'), F.col('daily_cases')))
+
+def shift_days(days):
+    shifted_days = [ day - 1 if day - 1 > 0 else 7 for day in days ]
+    return shifted_days
+
+test_df = get_df()
+find_monthly_avg_cases(test_df)
+test_merge = join_continent_data(test_df)

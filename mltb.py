@@ -57,11 +57,13 @@ def find_week_nums(df):
     return weekly_df
 
 def get_slope_df(df):
-	get_slope = F.udf(get_slope, returnType=DoubleType())
-	shift_days = F.udf(shift_days, ArrayType(IntegerType()))
+	get_slope_udf = F.udf(get_slope, returnType=DoubleType())
+	shift_days_udf = F.udf(shift_days, ArrayType(IntegerType()))
 	df_with_week_days = df.withColumn("week", weekofyear(df.date)).withColumn("day", dayofweek(df.date)).withColumn('province_or_country',coalesce('province','country'))
 	df_array_values = df_with_week_days.orderBy('province_or_country','week','date').groupBy('province_or_country','week').agg(collect_list('daily_cases').alias('daily_cases'), collect_list('day').alias('days'))
-	return df_array_values.withColumn('slope', get_slope(F.col('days'), F.col('daily_cases')))
+	df_array_values = df_array_values.withColumn('days', shift_days_udf(F.col('days')))
+	return df_array_values.withColumn('slope', get_slope_udf(F.col('days'), F.col('daily_cases')))
+
 
 def shift_days(days):
     shifted_days = [ day - 1 if day - 1 > 0 else 7 for day in days ]

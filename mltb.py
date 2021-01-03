@@ -4,6 +4,8 @@ from pyspark.sql.functions import *
 import pyspark.sql.functions as f
 from pyspark.sql.types import *
 from pyspark.sql import SparkSession, SQLContext, Window
+import numpy as np
+
 
 def get_df():
 	file_url = 'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv'
@@ -54,3 +56,8 @@ def find_week_nums(df):
     weekly_df = df.withColumn('week_no', weekofyear(df.date)).select("Continent", "country", "province", "date", "cases", "daily_cases", "week_no")
     weekly_df = weekly_df.withColumn('week_no', weekly_df.week_no - (weekly_df.collect()[0]['week_no'] - 1))
     return weekly_df
+
+
+def get_slope_df(df):
+	df_with_week_days = df.withColumn("week", weekofyear(df.date)).withColumn("day", dayofweek(df.date)).withColumn('province_or_country',coalesce('province','country'))
+	df_array_values = df_with_week_days.orderBy('day').groupBy('province_or_country','week').agg(collect_list('daily_cases').alias('daily_cases'), collect_list('day').alias('days'))

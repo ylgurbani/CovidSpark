@@ -38,6 +38,26 @@ def find_monthly_avg_cases(df):
 	monthly_df = monthly_df.groupBy('country','month').agg(avg('daily_cases').alias('avg_cases')).orderBy('country', 'month')
 	return monthly_df
 
+def find_monthly_avg_cases_new(df):
+    """Finds the daily average per month
+    Input: original dataset
+    """
+    monthly_df = df.withColumn('month', date_format(df.date,'yyyy-MM'))
+    monthly_df = monthly_df.withColumn('daily_cases', when(col('daily_cases') < 0, 0).otherwise(col('daily_cases')))
+    
+    window_spec = Window.partitionBy('country', 'month')
+    monthly_df = monthly_df.withColumn('count', F.approx_count_distinct('date').over(window_spec))
+    monthly_df = monthly_df.groupBy('country', 'month').agg(F.sum('daily_cases').alias('cumulative_sum'), collect_list('count').alias('count'))
+    
+    #monthly_df = monthly_df.withColumn('daily_avg_cases', col('cumulative_sum') / monthly_df.collect()[0][0]['count'])
+    
+    cols = ("Lat", "Long", "date")
+    monthly_df = monthly_df.drop(*cols)
+    
+    month_df = monthly_df.orderBy('country', 'month')
+    
+    return monthly_df
+
 def get_slope(x,y,order=1):
     coeffs = np.polyfit(x, y, order)
     slope = coeffs[-2]

@@ -59,8 +59,11 @@ def find_week_nums(df):
 
 def get_stats_continents(df):
 	get_slope_udf = F.udf(get_slope, returnType=DoubleType())
+	replace_negatives_udf = F.udf(replace_negatives, returnType=ArrayType(DoubleType()))
 	shift_days_udf = F.udf(shift_days, returnType=ArrayType(IntegerType()))
 	df_array_values = df.orderBy('continent','province','week','date').groupBy('continent','province','week').agg(collect_list('daily_cases').alias('daily_cases'), collect_list('day').alias('days'))
+	df_array_values = df_array_values.withColumn('daily_cases', replace_negatives_udf(F.col('daily_cases')))
+
 	df_array_values = df_array_values.withColumn('days', shift_days_udf(F.col('days')))
 
 	stats_df = df_array_values.withColumn('slope', get_slope_udf(F.col('days'), F.col('daily_cases')))
@@ -76,6 +79,17 @@ def get_stats_continents(df):
 def shift_days(days):
     shifted_days = [ day - 1 if day - 1 > 0 else 7 for day in days ]
     return shifted_days
+
+
+def replace_negatives(input):
+    non_negatives = [ num for num in input if num >= 0]
+    sum = 0
+    for num in non_negatives:
+        sum = sum + num
+        
+    average = sum / len(non_negatives)
+    return [num if num >= 0 else average for num in input]
+
 
 
 df = get_df()

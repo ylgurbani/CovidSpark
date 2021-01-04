@@ -1,7 +1,6 @@
 from pyspark import SparkFiles
-from pyspark.sql.functions import array, col, explode, struct, lit
 from pyspark.sql.functions import *
-import pyspark.sql.functions as f
+import pyspark.sql.functions as F
 from pyspark.sql.types import *
 from pyspark.sql import SparkSession, SQLContext, Window
 import numpy as np
@@ -23,16 +22,21 @@ def get_df():
 
 	input_df = input_df.select(index_columns + [transpose_columns]).select(index_columns + ["transpose_columns.date", "transpose_columns.cases"])
 	input_df = input_df.withColumn('date', to_date(input_df.date, 'M/d/yy'))
+
+	continent_df = spark.read.format("csv").option("header", "true").load('/home/gowthaman/git/covid-analytics/continent_mapping.csv')
+	input_df = input_df.join(continent_df, on=['country'], how='inner')
 	
 	window_spec = Window.partitionBy("country", "province").orderBy("date")
 	input_df = input_df.withColumn("daily_cases", input_df.cases - when(F.lag(input_df.cases).over(window_spec).isNull(),input_df.cases).otherwise(F.lag(input_df.cases).over(window_spec)))
+	input_df = input_df.withColumn('province',coalesce('province','country'))
+	input_df = input_df.withColumn("week", weekofyear(input_df.date)).withColumn("day", dayofweek(input_df.date)).withColumn('month', month(input_df.date))
 	
 	return input_df
 
 def find_monthly_avg_cases(df):
 	monthly_df = df.withColumn('month', date_format(df.date,'yyyy-MM'))
 	monthly_df = monthly_df.groupBy('country','month').agg(avg('daily_cases').alias('avg_cases')).orderBy('country', 'month')
-	monthly_df.show()
+	return monthly_df
 
 def get_slope(x,y,order=1):
     coeffs = np.polyfit(x, y, order)
@@ -41,30 +45,41 @@ def get_slope(x,y,order=1):
 
 def join_continent_data(df):
     spark = SparkSession.builder.getOrCreate()
-    continent_df = spark.read.format("csv").option("header", "true").load('continent_mapping.csv')
-    continent_merge_df = df.join(continent_df, on=['country'], how='inner')
+    
     return continent_merge_df
 
-def get_top_100_slope_df(df):
-    get_slope_udf = F.udf(get_slope, returnType=DoubleType())
-    shift_days_udf = F.udf(shift_days, ArrayType(IntegerType()))
-    
-    df_with_week_days = df.withColumn("week", weekofyear(df.date)).withColumn("day", dayofweek(df.date)).withColumn('province_or_country',coalesce('province','country'))
-    df_with_week_days = df_with_week_days.withColumn("week", df_with_week_days.week - (df_with_week_days.collect()[0]['week'] - 1))
-    
-    df_array_values = df_with_week_days.orderBy('province_or_country','week','date').groupBy('province_or_country','week').agg(collect_list('daily_cases').alias('daily_cases'), collect_list('day').alias('days'))
-    df_array_values = df_array_values.withColumn('days', shift_days_udf(F.col('days')))
-    df_array_values = df_array_values.withColumn('slope', get_slope_udf(F.col('days'), F.col('daily_cases'))).select('week', 'province_or_country', 'slope')
-    
-    window_spec = Window.partitionBy("week").orderBy(desc("slope"))
-    top_100_df = df_array_values.select('*', rank().over(window_spec).alias('rank')).filter(col('rank') <= 100)
+def find_week_nums(df):    
+    """Assigns a week number to each row based on the date
+    Input: merged dataset with continents
+    Output: dataset with the week numbers
+    """
+    weekly_df = df.withColumn('week_no', weekofyear(df.date)).select("Continent", "country", "province", "date", "cases", "daily_cases", "week_no")
+    weekly_df = weekly_df.withColumn('week_no', weekly_df.week_no - (weekly_df.collect()[0]['week_no'] - 1))
+    return weekly_df
 
-    return top_100_df.orderBy('week', 'rank')
+def get_stats_continents(df):
+	get_slope_udf = F.udf(get_slope, returnType=DoubleType())
+	shift_days_udf = F.udf(shift_days, returnType=ArrayType(IntegerType()))
+	df_array_values = df.orderBy('continent','province','week','date').groupBy('continent','province','week').agg(collect_list('daily_cases').alias('daily_cases'), collect_list('day').alias('days'))
+	df_array_values = df_array_values.withColumn('days', shift_days_udf(F.col('days')))
+
+	stats_df = df_array_values.withColumn('slope', get_slope_udf(F.col('days'), F.col('daily_cases')))
+    
+	window = Window.partitionBy( stats_df['week']).orderBy(stats_df['slope'].desc())
+	stats_df = stats_df.select('continent', 'week', 'daily_cases', rank().over(window).alias('rank')).filter(col('rank') <= 100).orderBy(stats_df.week)
+	stats_df = stats_df.withColumn('daily_cases', explode(stats_df.daily_cases))
+	stats_df = stats_df.groupBy('continent','week').agg(avg('daily_cases').alias('average'), stddev('daily_cases').alias('deviation'), min('daily_cases').alias('minimum'), max('daily_cases').alias('maximum'))
+
+	return stats_df
+
 
 def shift_days(days):
     shifted_days = [ day - 1 if day - 1 > 0 else 7 for day in days ]
     return shifted_days
 
-test_df = get_df()
-find_monthly_avg_cases(test_df)
-test_merge = join_continent_data(test_df)
+
+df = get_df()
+df.cache()
+
+monthly_average = find_monthly_avg_cases(df)
+continents_stats = get_stats_continents(df)

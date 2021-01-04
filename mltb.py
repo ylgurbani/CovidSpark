@@ -25,12 +25,12 @@ def get_df():
 
 	continent_df = spark.read.format("csv").option("header", "true").load('/home/gowthaman/git/covid-analytics/continent_mapping.csv')
 	input_df = input_df.join(continent_df, on=['country'], how='inner')
-	
+
 	window_spec = Window.partitionBy("country", "province").orderBy("date")
 	input_df = input_df.withColumn("daily_cases", input_df.cases - when(F.lag(input_df.cases).over(window_spec).isNull(),input_df.cases).otherwise(F.lag(input_df.cases).over(window_spec)))
 	input_df = input_df.withColumn('province',coalesce('province','country'))
 	input_df = input_df.withColumn("week", weekofyear(input_df.date)).withColumn("day", dayofweek(input_df.date)).withColumn('month', month(input_df.date))
-	
+
 	return input_df
 
 def find_monthly_avg_cases(df):
@@ -67,10 +67,12 @@ def get_stats_continents(df):
 	df_array_values = df_array_values.withColumn('days', shift_days_udf(F.col('days')))
 
 	stats_df = df_array_values.withColumn('slope', get_slope_udf(F.col('days'), F.col('daily_cases')))
-    
 	window = Window.partitionBy( stats_df['week']).orderBy(stats_df['slope'].desc())
-	stats_df = stats_df.select('continent', 'week', 'daily_cases', rank().over(window).alias('rank')).filter(col('rank') <= 100).orderBy(stats_df.week)
-	stats_df = stats_df.withColumn('daily_cases', explode(stats_df.daily_cases))
+	stats_df = stats_df.select('continent', 'week', 'days', 'daily_cases', rank().over(window).alias('rank')).filter(col('rank') <= 100).orderBy(stats_df.week)
+
+	stats_df = stats_df.withColumn('zip_cols', explode(arrays_zip(stats_df.daily_cases, stats_df.days))).select('continent','week','zip_cols.days','zip_cols.daily_cases')
+
+	stats_df = stats_df.groupBy('continent', 'week', 'days').agg(avg('daily_cases').alias('daily_cases'))
 	stats_df = stats_df.groupBy('continent','week').agg(avg('daily_cases').alias('average'), stddev('daily_cases').alias('deviation'), min('daily_cases').alias('minimum'), max('daily_cases').alias('maximum'))
 
 	return stats_df

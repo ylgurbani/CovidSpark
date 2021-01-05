@@ -35,7 +35,8 @@ def get_df():
 	input_df = input_df.withColumn('week', input_df.week - (input_df.collect()[0]['week'] - 1))\
 	                   .withColumn("day", dayofweek(input_df.date))\
 	                   .withColumn("day_of_month", dayofmonth(input_df.date))\
-	                   .withColumn('month', month(input_df.date))
+	                   .withColumn('month', month(input_df.date))\
+	                   .withColumn('year', year(input_df.date))
 
 	return input_df
 
@@ -49,22 +50,22 @@ def find_monthly_avg_cases(df):
     monthly_df = monthly_df.withColumn('daily_cases', when(col('daily_cases') < 0, 0)\
 				                      .otherwise(col('daily_cases')))
     
-    coal_df = monthly_df.orderBy('country', 'province', 'month')\
-	                .groupBy('country', 'province', 'month')\
+    coal_df = monthly_df.orderBy('country', 'province', 'month', 'year')\
+	                .groupBy('country', 'province', 'month', 'year')\
 	                .agg(collect_list('daily_cases').alias('daily_cases'))
     coal_df = coal_df.withColumn('days_in_month', count_udf(F.col('daily_cases')))
     coal_df = coal_df.withColumn('daily_cases', explode(coal_df.daily_cases))
     
-    window1 = Window.partitionBy('country', 'province', 'month')\
-	            .orderBy('country', 'province', 'month')
-    grouped_df = coal_df.groupBy('country', 'province', 'month', 'days_in_month')\
+    window1 = Window.partitionBy('country', 'province', 'month', 'year')\
+	            .orderBy('country', 'province', 'month', 'year')
+    grouped_df = coal_df.groupBy('country', 'province', 'month', 'year', 'days_in_month')\
                         .agg(sum('daily_cases').alias('sum1'))
-    final_df = grouped_df.groupBy('country', 'month', 'days_in_month')\
+    final_df = grouped_df.groupBy('country', 'month', 'year', 'days_in_month')\
 	                 .agg(sum('sum1').alias('total_monthly_cases'))
     final_df = final_df.withColumn('daily_avg_per_month', col('total_monthly_cases') / col('days_in_month'))\
-                       .select('country', 'month', 'total_monthly_cases', 'daily_avg_per_month')
+                       .select('country', 'month', 'year', 'total_monthly_cases', 'daily_avg_per_month')
     
-    return final_df.orderBy('country', 'month')
+    return final_df.orderBy('country', 'month', 'year')
 
 def count_rows(input):
     return float(len(input))
@@ -79,23 +80,23 @@ def get_stats_continents(df):
 	replace_negatives_udf = F.udf(replace_negatives, returnType=ArrayType(DoubleType()))
 	shift_days_udf = F.udf(shift_days, returnType=ArrayType(IntegerType()))
 
-	df_array_values = df.orderBy('continent','province','week','date')\
-			    .groupBy('continent','province','week')\
+	df_array_values = df.orderBy('continent','province', 'year','week','date')\
+			    .groupBy('continent','province', 'year','week')\
 			    .agg(collect_list('daily_cases').alias('daily_cases'), collect_list('day').alias('days'))
 	df_array_values = df_array_values.withColumn('daily_cases', replace_negatives_udf(F.col('daily_cases')))
 
 	df_array_values = df_array_values.withColumn('days', shift_days_udf(F.col('days')))
 	stats_df = df_array_values.withColumn('slope', get_slope_udf(F.col('days'), F.col('daily_cases')))
 	
-	window = Window.partitionBy( stats_df['week'])\
+	window = Window.partitionBy('week', 'year')\
 		       .orderBy(stats_df['slope'].desc())
-	stats_df = stats_df.select('continent', 'week', 'days', 'daily_cases', rank().over(window).alias('rank'))\
+	stats_df = stats_df.select('continent', 'year', 'week', 'days', 'daily_cases', rank().over(window).alias('rank'))\
 			   .filter(col('rank') <= 100).orderBy(stats_df.week)
 	stats_df = stats_df.withColumn('zip_cols', explode(arrays_zip(stats_df.daily_cases, stats_df.days)))\
-			   .select('continent','week','zip_cols.days','zip_cols.daily_cases')
-	stats_df = stats_df.groupBy('continent', 'week', 'days')\
+			   .select('continent', 'year','week','zip_cols.days','zip_cols.daily_cases')
+	stats_df = stats_df.groupBy('continent', 'year', 'week', 'days')\
 			   .agg(avg('daily_cases').alias('daily_cases'))
-	stats_df = stats_df.groupBy('continent','week')\
+	stats_df = stats_df.groupBy('continent','week', 'year')\
 			   .agg(avg('daily_cases').alias('average'), stddev('daily_cases').alias('deviation'), min('daily_cases').alias('minimum'), max('daily_cases').alias('maximum'))
 
 	return stats_df
@@ -121,25 +122,24 @@ def cluster_top_provinces(df):
     get_slope_udf = F.udf(get_slope, returnType=DoubleType())
     replace_negatives_udf = F.udf(replace_negatives, returnType=ArrayType(DoubleType()))
 
-    df_array_values = df.orderBy('province','week','date')\
-			.groupBy('province','month')\
+    df_array_values = df.orderBy('province', 'year','month','date')\
+			.groupBy('province','month', 'year')\
 			.agg(collect_list('daily_cases').alias('daily_cases'), collect_list('day_of_month').alias('days'), collect_list('date').alias('date'))
     df_array_values = df_array_values.withColumn('daily_cases', replace_negatives_udf(F.col('daily_cases')))
 
     slope_df = df_array_values.withColumn('slope', get_slope_udf(F.col('days'), F.col('daily_cases')))
     slope_df = slope_df.filter(slope_df.slope > 0)
-    window = Window.partitionBy( slope_df['month'])\
+    window = Window.partitionBy('year', 'month')\
 		   .orderBy(slope_df['slope'].desc())
-    slope_df = slope_df.select('province', 'month', 'days', 'daily_cases', 'slope', rank().over(window).alias('rank'))\
-		       .filter(col('rank') <= 50).orderBy('month', 'rank')
+    slope_df = slope_df.select('province', 'year', 'month', 'days', 'daily_cases', 'slope', rank().over(window).alias('rank'))\
+		       .filter(col('rank') <= 50).orderBy('month', 'year', 'rank')
     
-    months = slope_df.select('month').dropDuplicates().collect()
-    months = [month.month for month in months]
+    month_year = slope_df.select('month', 'year').dropDuplicates().collect()
     
     cluster_df_list = []
     
-    for month in months:
-        filtered_df = slope_df.filter(slope_df.month == month)
+    for row in month_year:
+        filtered_df = slope_df.filter((slope_df.month == row.month) & (slope_df.year == row.year))
         cluster_df_list.append(kmeans(slope_df))
         
     from functools import reduce
@@ -167,3 +167,4 @@ df.cache()
 
 monthly_average = find_monthly_avg_cases(df)
 continents_stats = get_stats_continents(df)
+cluster_top_provinces = cluster_top_provinces(df)

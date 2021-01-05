@@ -29,7 +29,7 @@ def get_df():
 	window_spec = Window.partitionBy("country", "province").orderBy("date")
 	input_df = input_df.withColumn("daily_cases", input_df.cases - when(F.lag(input_df.cases).over(window_spec).isNull(),input_df.cases).otherwise(F.lag(input_df.cases).over(window_spec)))
 	input_df = input_df.withColumn('province',coalesce('province','country'))
-	input_df = input_df.withColumn("week", weekofyear(input_df.date)).withColumn("day", dayofweek(input_df.date)).withColumn('month', month(input_df.date))
+	input_df = input_df.withColumn("week", weekofyear(input_df.date)).withColumn("day", dayofweek(input_df.date)).withColumn("day_of_month", dayofmonth(input_df.date)).withColumn('month', month(input_df.date))
 
 	return input_df
 
@@ -112,6 +112,50 @@ def replace_negatives(input):
     average = sum / len(non_negatives)
     return [num if num >= 0 else average for num in input]
 
+
+def cluster_top_provinces(df):
+
+    get_slope_udf = F.udf(get_slope, returnType=DoubleType())
+    replace_negatives_udf = F.udf(replace_negatives, returnType=ArrayType(DoubleType()))
+
+    df_array_values = df.orderBy('province','week','date').groupBy('province','month').agg(collect_list('daily_cases').alias('daily_cases'), collect_list('day_of_month').alias('days'), collect_list('date').alias('date'))
+    df_array_values = df_array_values.withColumn('daily_cases', replace_negatives_udf(F.col('daily_cases')))
+
+    slope_df = df_array_values.withColumn('slope', get_slope_udf(F.col('days'), F.col('daily_cases')))
+    slope_df = slope_df.filter(slope_df.slope > 0)
+    window = Window.partitionBy( slope_df['month']).orderBy(slope_df['slope'].desc())
+    slope_df = slope_df.select('province', 'month', 'days', 'daily_cases', 'slope', rank().over(window).alias('rank')).filter(col('rank') <= 50).orderBy('month', 'rank')
+    
+    months = slope_df.select('month').dropDuplicates().collect()
+    months = [month.month for month in months]
+    
+    cluster_df_list = []
+    
+    for month in months:
+        filtered_df = slope_df.filter(slope_df.month == month)
+        cluster_df_list.append(kmeans(slope_df))
+        
+    from functools import reduce
+    from pyspark.sql import DataFrame
+    clusters = reduce(DataFrame.unionAll, cluster_df)
+
+    return clusters
+
+
+
+def kmeans(df):
+    assembler = VectorAssembler(inputCols=["slope"],outputCol="features")
+    output = assembler.transform(df)
+
+    kmeans = KMeans() \
+      .setK(3) \
+      .setFeaturesCol("features") \
+      .setPredictionCol("cluster")
+
+    model = kmeans.fit(output)
+    predictions = model.transform(output)
+
+    return predictions
 
 
 df = get_df()

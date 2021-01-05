@@ -131,7 +131,7 @@ def cluster_top_provinces(df):
     df_array_values = df_array_values.withColumn('daily_cases', replace_negatives_udf(F.col('daily_cases')))
 
     slope_df = df_array_values.withColumn('slope', get_slope_udf(F.col('days'), F.col('daily_cases')))
-    slope_df = slope_df.filter(slope_df.slope > 0)
+    slope_df = slope_df.filter(slope_df.slope != 0)
     window = Window.partitionBy('year', 'month')\
 		   .orderBy(slope_df['slope'].desc())
     slope_df = slope_df.select('province', 'year', 'month', 'days', 'daily_cases', 'slope', rank().over(window).alias('rank'))\
@@ -139,11 +139,14 @@ def cluster_top_provinces(df):
     
     month_year = slope_df.select('month', 'year').dropDuplicates().collect()
     
+    #Uncomment below line to run few months and make code faster for debugginhg
+    #month_year = month_year[1:3]
+
     cluster_df_list = []
     
     for row in month_year:
         filtered_df = slope_df.filter((slope_df.month == row.month) & (slope_df.year == row.year))
-        cluster_df_list.append(kmeans(slope_df))
+        cluster_df_list.append(kmeans(filtered_df))
         
     from functools import reduce
     from pyspark.sql import DataFrame
@@ -156,7 +159,7 @@ def kmeans(df):
     output = assembler.transform(df)
 
     kmeans = KMeans() \
-      .setK(3) \
+      .setK(4) \
       .setFeaturesCol("features") \
       .setPredictionCol("cluster")
 

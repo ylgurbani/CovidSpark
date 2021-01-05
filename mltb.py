@@ -149,7 +149,7 @@ def cluster_top_provinces(df):
         
     from functools import reduce
     from pyspark.sql import DataFrame
-    clusters = reduce(DataFrame.unionAll, cluster_df)
+    clusters = reduce(DataFrame.unionAll, cluster_df_list)
 
     return clusters
 

@@ -28,14 +28,13 @@ def get_df():
 	continent_df = spark.read.format("csv").option("header", "true")\
 	                         .load('/home/gowthaman/git/covid-analytics/continent_mapping.csv')
 	input_df = input_df.join(continent_df, on=['country'], how='inner')\
-	                   #.select('continent', 'country', 'province', 'Lat', 'Long', 'date', 'cases', 'daily_cases')
+	                   .select('continent', 'country', 'province', 'Lat', 'Long', 'date', 'cases')
 	
 	window_spec = Window.partitionBy("country", "province").orderBy("date")
 	input_df = input_df.withColumn("daily_cases", input_df.cases - when(F.lag(input_df.cases).over(window_spec).isNull(),input_df.cases)\
 				                                       .otherwise(F.lag(input_df.cases).over(window_spec)))
 	input_df = input_df.withColumn('province',coalesce('province','country'))
-	input_df = input_df.withColumn("week", weekofyear(input_df.date))
-	input_df = input_df.withColumn('week', input_df.week - (input_df.collect()[0]['week'] - 1))\
+	input_df = input_df.withColumn("week", weekofyear(input_df.date))\
 	                   .withColumn("day", dayofweek(input_df.date))\
 	                   .withColumn("day_of_month", dayofmonth(input_df.date))\
 	                   .withColumn('month', month(input_df.date))\

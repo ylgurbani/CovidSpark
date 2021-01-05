@@ -110,6 +110,9 @@ def replace_negatives(input):
     for num in non_negatives:
         sum = sum + num
         
+    if len(non_negatives) == 0:
+       non_negatives.insert(0,0)    
+
     average = sum / len(non_negatives)
     return [num if num >= 0 else average for num in input]
 

@@ -34,9 +34,26 @@ def get_df():
 	return input_df
 
 def find_monthly_avg_cases(df):
-	monthly_df = df.withColumn('month', date_format(df.date,'yyyy-MM'))
-	monthly_df = monthly_df.groupBy('country','month').agg(avg('daily_cases').alias('avg_cases')).orderBy('country', 'month')
-	return monthly_df
+    """Finds the daily average per month
+    Input: original dataset
+    """
+    count_udf = F.udf(count_rows, returnType=DoubleType())
+    monthly_df = df.withColumn('month', date_format(df.date,'yyyy-MM'))
+    monthly_df = monthly_df.withColumn('daily_cases', when(col('daily_cases') < 0, 0).otherwise(col('daily_cases')))
+    
+    coal_df = monthly_df.orderBy('country', 'province', 'month').groupBy('country', 'province', 'month').agg(collect_list('daily_cases').alias('daily_cases'))
+    coal_df = coal_df.withColumn('days_in_month', count_udf(F.col('daily_cases')))
+    coal_df = coal_df.withColumn('daily_cases', explode(coal_df.daily_cases))
+    
+    window1 = Window.partitionBy('country', 'province', 'month').orderBy('country', 'province', 'month')
+    grouped_df = coal_df.groupBy('country', 'province', 'month', 'days_in_month').agg(sum('daily_cases').alias('sum1'))
+    final_df = grouped_df.groupBy('country', 'month', 'days_in_month').agg(sum('sum1').alias('total_monthly_cases'))
+    final_df = final_df.withColumn('daily_avg_per_month', col('total_monthly_cases') / col('days_in_month')).select('country', 'month', 'total_monthly_cases', 'daily_avg_per_month')
+    
+    return final_df.orderBy('country', 'month')
+
+def count_rows(input):
+    return float(len(input))
 
 def find_monthly_avg_cases_new(df):
     """Finds the daily average per month

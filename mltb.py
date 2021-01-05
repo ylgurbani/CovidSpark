@@ -5,6 +5,9 @@ from pyspark.sql.types import *
 from pyspark.sql import SparkSession, SQLContext, Window
 import numpy as np
 
+from pyspark.ml.feature import VectorAssembler
+from pyspark.ml.clustering import KMeans
+
 def get_df():
 	
 	file_url = 'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv'

@@ -155,7 +155,7 @@ def kmeans(df):
     output = assembler.transform(df)
 
     kmeans = KMeans() \
-      .setK(3) \
+      .setK(4) \
       .setFeaturesCol("features") \
       .setPredictionCol("cluster")
 

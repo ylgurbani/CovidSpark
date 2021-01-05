@@ -62,7 +62,8 @@ def get_slope(x,y,order=1):
 
 def join_continent_data(df):
     spark = SparkSession.builder.getOrCreate()
-    
+    continent_df = spark.read.format("csv").option("header", "true").load('continent_mapping.csv')
+    continent_merge_df = df.join(continent_df, on=['country'], how='inner')
     return continent_merge_df
 
 def find_week_nums(df):    

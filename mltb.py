@@ -49,12 +49,11 @@ def find_monthly_avg_cases(df):
     count_udf = F.udf(count_rows, returnType=DoubleType())
     
     monthly_df = df.withColumn('month', date_format(df.date,'yyyy-MM'))
-    monthly_df = monthly_df.withColumn('daily_cases', when(col('daily_cases') < 0, 0)\
-				                      .otherwise(col('daily_cases')))
     
     coal_df = monthly_df.orderBy('country', 'province', 'month', 'year')\
 	                .groupBy('country', 'province', 'month', 'year')\
 	                .agg(collect_list('daily_cases').alias('daily_cases'))
+    coal_df = coal_df.withColumn('daily_cases', replace_negatives_udf(F.col('daily_cases')))
     coal_df = coal_df.withColumn('days_in_month', count_udf(F.col('daily_cases')))
     coal_df = coal_df.withColumn('daily_cases', explode(coal_df.daily_cases))
     

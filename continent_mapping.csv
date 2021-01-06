@@ -13,30 +13,30 @@ Mauritania,Africa
 Singapore,Asia
 United Arab Emirates,Asia
 Belgium,Europe
-Antigua and Barbuda,North America
+Antigua and Barbuda,America
 San Marino,Europe
 Sierra Leone,Africa
 Cyprus,Asia
 Samoa,Oceania
 United Kingdom,Europe
-Ecuador,South America
+Ecuador,America
 Ukraine,Europe
 Angola,Africa
 Bosnia and Herzegovina,Europe
-Honduras,North America
+Honduras,America
 Germany,Europe
 Eswatini,Africa
 Georgia,Asia
 Malta,Europe
 Iran,Asia
 Moldova,Europe
-El Salvador,North America
+El Salvador,America
 Holy See,Europe
 Tunisia,Africa
 Philippines,Asia
 Cambodia,Asia
 Estonia,Europe
-Paraguay,South America
+Paraguay,America
 Comoros,Africa
 Czechia,Europe
 Vanuatu,Oceania
@@ -46,12 +46,12 @@ Eritrea,Africa
 Slovenia,Europe
 Ghana,Africa
 Brunei,Asia
-Mexico,North America
+Mexico,America
 Bhutan,Asia
 Israel,Asia
 Morocco,Africa
 Montenegro,Europe
-Canada,North America
+Canada,America
 Albania,Europe
 Armenia,Asia
 Austria,Europe
@@ -66,20 +66,20 @@ Kyrgyzstan,Asia
 Tajikistan,Asia
 Cameroon,Africa
 Poland,Europe
-Argentina,South America
+Argentina,America
 Chad,Africa
 Djibouti,Africa
-Dominican Republic,North America
-Bahamas,North America
+Dominican Republic,America
+Bahamas,America
 France,Europe
-Jamaica,North America
+Jamaica,America
 Hungary,Europe
 Senegal,Africa
 South Africa,Africa
 Turkey,Asia
 Luxembourg,Europe
 Mali,Africa
-Saint Lucia,North America
+Saint Lucia,America
 Seychelles,Africa
 Algeria,Africa
 Guinea,Africa
@@ -89,23 +89,23 @@ Botswana,Africa
 Greece,Europe
 Australia,Oceania
 Spain,Europe
-Venezuela,South America
+Venezuela,America
 Central African Republic,Africa
 Iceland,Europe
-Nicaragua,North America
+Nicaragua,America
 Azerbaijan,Asia
 Andorra,Europe
 Equatorial Guinea,Africa
-Guyana,South America
+Guyana,America
 Lebanon,Asia
-Trinidad and Tobago,North America
+Trinidad and Tobago,America
 Rwanda,Africa
-Barbados,North America
+Barbados,America
 Congo (Brazzaville),Africa
 Sao Tome and Principe,Africa
 Vietnam,Asia
-Costa Rica,North America
-Dominica,North America
+Costa Rica,America
+Dominica,America
 Malawi,Africa
 Indonesia,Asia
 Switzerland,Europe
@@ -116,50 +116,50 @@ South Sudan,Africa
 Lithuania,Europe
 Denmark,Europe
 Mozambique,Africa
-Saint Kitts and Nevis,North America
+Saint Kitts and Nevis,America
 Bahrain,Asia
-Grenada,North America
+Grenada,America
 Latvia,Europe
 Benin,Africa
 Bulgaria,Europe
 India,Asia
 Croatia,Europe
-Saint Vincent and the Grenadines,North America
+Saint Vincent and the Grenadines,America
 Liechtenstein,Europe
 Zambia,Africa
 Kenya,Africa
 Sweden,Europe
 Solomon Islands,Oceania
 Ireland,Europe
-Haiti,North America
+Haiti,America
 Saudi Arabia,Asia
-Suriname,South America
+Suriname,America
 New Zealand,Oceania
-Peru,South America
+Peru,America
 Sudan,Africa
 North Macedonia,Europe
 Thailand,Asia
 Uganda,Africa
 Iraq,Asia
 Mongolia,Asia
-Brazil,South America
+Brazil,America
 Egypt,Africa
 Bangladesh,Asia
 Kazakhstan,Asia
 Yemen,Asia
 Burkina Faso,Africa
-Chile,South America
-Cuba,North America
+Chile,America
+Cuba,America
 Belarus,Europe
 Niger,Africa
 Nigeria,Africa
-Bolivia,South America
+Bolivia,America
 Monaco,Europe
 Netherlands,Europe
 Marshall Islands,Oceania
-Belize,North America
-Colombia,South America
-Panama,North America
+Belize,America
+Colombia,America
+Panama,America
 Burma,Asia
 Maldives,Asia
 China,Asia
@@ -169,13 +169,13 @@ Oman,Asia
 Serbia,Europe
 Ethiopia,Africa
 Tanzania,Africa
-Guatemala,North America
+Guatemala,America
 Norway,Europe
 Kuwait,Asia
 Romania,Europe
-US,North America
+US,America
 Cabo Verde,Africa
-Uruguay,South America
+Uruguay,America
 Nepal,Asia
 Portugal,Europe
 Timor-Leste,Asia
@@ -184,7 +184,7 @@ Burundi,Africa
 Liberia,Africa
 Malaysia,Asia
 West Bank and Gaza,Asia
-Diamond Princess,North America
+Diamond Princess,America
 Cote d'Ivoire,Africa
 Taiwan*,Asia
 Laos,Asia

@@ -50,8 +50,8 @@ def find_monthly_avg_cases(df):
     
     monthly_df = df.withColumn('month', date_format(df.date,'yyyy-MM'))
     
-    coal_df = monthly_df.orderBy('country', 'province', 'month', 'year')\
-	                .groupBy('country', 'province', 'month', 'year')\
+    coal_df = monthly_df.orderBy('country', 'province', 'year', 'month')\
+	                .groupBy('country', 'province', 'year', 'month')\
 	                .agg(collect_list('daily_cases').alias('daily_cases'))
     coal_df = coal_df.withColumn('daily_cases', replace_negatives_udf(F.col('daily_cases')))
     coal_df = coal_df.withColumn('days_in_month', count_udf(F.col('daily_cases')))
@@ -124,7 +124,7 @@ def cluster_top_provinces(df):
     replace_negatives_udf = F.udf(replace_negatives, returnType=ArrayType(DoubleType()))
 
     df_array_values = df.orderBy('province', 'year','month','date')\
-			.groupBy('province','month', 'year')\
+			.groupBy('province', 'year', 'month')\
 			.agg(collect_list('daily_cases').alias('daily_cases'), collect_list('day_of_month').alias('days'), collect_list('date').alias('date'))
     df_array_values = df_array_values.withColumn('daily_cases', replace_negatives_udf(F.col('daily_cases')))
 

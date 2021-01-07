@@ -133,7 +133,7 @@ def cluster_top_provinces(df):
     window = Window.partitionBy('year', 'month')\
 		   .orderBy(slope_df['slope'].desc())
     slope_df = slope_df.select('province', 'year', 'month', 'days', 'daily_cases', 'slope', rank().over(window).alias('rank'))\
-		       .filter(col('rank') <= 50).orderBy('month', 'year', 'rank')
+		       .filter(col('rank') <= 50).orderBy('year', 'month', 'rank')
     
     month_year = slope_df.select('month', 'year').dropDuplicates().collect()
     

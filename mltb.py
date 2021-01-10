@@ -4,9 +4,22 @@ import pyspark.sql.functions as F
 from pyspark.sql.types import *
 from pyspark.sql import SparkSession, SQLContext, Window
 import numpy as np
+import sys
 
 from pyspark.ml.feature import VectorAssembler
 from pyspark.ml.clustering import KMeans
+
+spark = SparkSession \
+    .builder \
+    .master("local[*]") \
+    .appName("COVID Analytics") \
+    .getOrCreate()
+
+spark.sparkContext.setLogLevel('WARN')
+
+path = sys.argv[0]
+path = path[0:path.rfind('/')]
+
 
 def get_df():
 	
@@ -26,7 +39,7 @@ def get_df():
 	input_df = input_df.withColumn('date', to_date(input_df.date, 'M/d/yy'))
 
 	continent_df = spark.read.format("csv").option("header", "true")\
-	                         .load('/home/gowthaman/git/covid-analytics/continent_mapping.csv')
+	                        .load(path + '/continent_mapping.csv')
 	input_df = input_df.join(continent_df, on=['country'], how='inner')\
 	                   .select('continent', 'country', 'province', 'Lat', 'Long', 'date', 'cases')
 	
@@ -40,6 +53,8 @@ def get_df():
 	                   .withColumn('month', month(input_df.date))\
 	                   .withColumn('year', year(input_df.date))
 
+	input_df.repartition(100)
+
 	return input_df
 
 def find_monthly_avg_cases(df):
@@ -47,6 +62,7 @@ def find_monthly_avg_cases(df):
     Input: original dataset
     """
     count_udf = F.udf(count_rows, returnType=DoubleType())
+    replace_negatives_udf = F.udf(replace_negatives, returnType=ArrayType(DoubleType()))
     
     monthly_df = df.withColumn('month', date_format(df.date,'yyyy-MM'))
     
@@ -66,7 +82,9 @@ def find_monthly_avg_cases(df):
     final_df = final_df.withColumn('daily_avg_per_month', col('total_monthly_cases') / col('days_in_month'))\
                        .select('country', 'month', 'year', 'total_monthly_cases', 'daily_avg_per_month')
     
-    return final_df.orderBy('country', 'month', 'year')
+    final_df = final_df.drop('total_monthly_cases').withColumn('daily_avg_per_month', F.round(final_df.daily_avg_per_month, 2))
+    final_df = final_df.orderBy('country', 'month', 'year')
+    final_df.repartition(1).write.option("header", "true").csv(path + '/output/monthly_avg_cases')
 
 def count_rows(input):
     return float(len(input))
@@ -100,7 +118,8 @@ def get_stats_continents(df):
 	stats_df = stats_df.groupBy('continent','week', 'year')\
 			   .agg(avg('daily_cases').alias('average'), stddev('daily_cases').alias('deviation'), min('daily_cases').alias('minimum'), max('daily_cases').alias('maximum'))
 
-	return stats_df
+	stats_df = stats_df.withColumn('average',F.round(stats_df.average, 2)).withColumn('deviation',F.round(stats_df.deviation, 2)).withColumn('minimum',F.round(stats_df.minimum, 0).cast('integer')).withColumn('maximum',F.round(stats_df.maximum, 0).cast('integer'))
+	stats_df.repartition(1).write.option("header", "true").csv(path + '/output/continent_weekly_stats')
 
 def shift_days(days):
     shifted_days = [ day - 1 if day - 1 > 0 else 7 for day in days ]
@@ -139,6 +158,8 @@ def cluster_top_provinces(df):
     
     #Uncomment below line to run few months and make code faster for debugginhg
     #month_year = month_year[1:3]
+    slope_df.cache()
+    slope_df.count()
 
     cluster_df_list = []
     
@@ -150,9 +171,11 @@ def cluster_top_provinces(df):
     from pyspark.sql import DataFrame
     clusters = reduce(DataFrame.unionAll, cluster_df_list)
 
-    return clusters
+    clusters.show()
+    clusters.select('province','month','year','cluster').repartition(1).write.option("header", "true").csv(path + '/output/clusters_monthly')
 
 def kmeans(df):
+
     assembler = VectorAssembler(inputCols=["slope"],outputCol="features")
     output = assembler.transform(df)
 
@@ -168,7 +191,11 @@ def kmeans(df):
 
 df = get_df()
 df.cache()
+df.count()
 
 monthly_average = find_monthly_avg_cases(df)
 continents_stats = get_stats_continents(df)
 cluster_top_provinces = cluster_top_provinces(df)
+
+
+spark.stop()

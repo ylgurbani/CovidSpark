@@ -49,12 +49,11 @@ def find_monthly_avg_cases(df):
     count_udf = F.udf(count_rows, returnType=DoubleType())
     
     monthly_df = df.withColumn('month', date_format(df.date,'yyyy-MM'))
-    monthly_df = monthly_df.withColumn('daily_cases', when(col('daily_cases') < 0, 0)\
-				                      .otherwise(col('daily_cases')))
     
-    coal_df = monthly_df.orderBy('country', 'province', 'month', 'year')\
-	                .groupBy('country', 'province', 'month', 'year')\
+    coal_df = monthly_df.orderBy('country', 'province', 'year', 'month')\
+	                .groupBy('country', 'province', 'year', 'month')\
 	                .agg(collect_list('daily_cases').alias('daily_cases'))
+    coal_df = coal_df.withColumn('daily_cases', replace_negatives_udf(F.col('daily_cases')))
     coal_df = coal_df.withColumn('days_in_month', count_udf(F.col('daily_cases')))
     coal_df = coal_df.withColumn('daily_cases', explode(coal_df.daily_cases))
     
@@ -125,7 +124,7 @@ def cluster_top_provinces(df):
     replace_negatives_udf = F.udf(replace_negatives, returnType=ArrayType(DoubleType()))
 
     df_array_values = df.orderBy('province', 'year','month','date')\
-			.groupBy('province','month', 'year')\
+			.groupBy('province', 'year', 'month')\
 			.agg(collect_list('daily_cases').alias('daily_cases'), collect_list('day_of_month').alias('days'), collect_list('date').alias('date'))
     df_array_values = df_array_values.withColumn('daily_cases', replace_negatives_udf(F.col('daily_cases')))
 
@@ -134,9 +133,9 @@ def cluster_top_provinces(df):
     window = Window.partitionBy('year', 'month')\
 		   .orderBy(slope_df['slope'].desc())
     slope_df = slope_df.select('province', 'year', 'month', 'days', 'daily_cases', 'slope', rank().over(window).alias('rank'))\
-		       .filter(col('rank') <= 50).orderBy('month', 'year', 'rank')
+		       .filter(col('rank') <= 50).orderBy('year', 'month', 'rank')
     
-    month_year = slope_df.select('month', 'year').dropDuplicates().collect()
+    month_year = slope_df.select('month', 'year').dropDuplicates().orderBy('year', 'month').collect()
     
     #Uncomment below line to run few months and make code faster for debugginhg
     #month_year = month_year[1:3]

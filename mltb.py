@@ -95,6 +95,10 @@ def get_slope(x,y,order=1):
     return float(slope)
 
 def get_stats_continents(df):
+
+	week_start_end_df = df.groupBy('week','year').agg(max('date').alias('weekend'),min('date').alias('weekstart'))
+	week_start_end_df = week_start_end_df.withColumn('weeks', concat(week_start_end_df.weekstart, lit(' - '), week_start_end_df.weekend))
+
 	get_slope_udf = F.udf(get_slope, returnType=DoubleType())
 	replace_negatives_udf = F.udf(replace_negatives, returnType=ArrayType(DoubleType()))
 	shift_days_udf = F.udf(shift_days, returnType=ArrayType(IntegerType()))
@@ -119,7 +123,10 @@ def get_stats_continents(df):
 			   .agg(avg('daily_cases').alias('average'), stddev('daily_cases').alias('deviation'), min('daily_cases').alias('minimum'), max('daily_cases').alias('maximum'))
 
 	stats_df = stats_df.withColumn('average',F.round(stats_df.average, 2)).withColumn('deviation',F.round(stats_df.deviation, 2)).withColumn('minimum',F.round(stats_df.minimum, 0).cast('integer')).withColumn('maximum',F.round(stats_df.maximum, 0).cast('integer'))
-	stats_df.repartition(1).write.option("header", "true").csv(path + '/output/continent_weekly_stats')
+	
+	stats_df = stats_df.join(week_start_end_df, on=['week','year'], how='inner').select(stats_df['*'], week_start_end_df.weeks)
+    
+	stats_df.drop('week','year').repartition(1).write.option("header", "true").csv(path + '/output/continent_weekly_stats')
 
 def shift_days(days):
     shifted_days = [ day - 1 if day - 1 > 0 else 7 for day in days ]

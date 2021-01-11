@@ -9,18 +9,6 @@ import sys
 from pyspark.ml.feature import VectorAssembler
 from pyspark.ml.clustering import KMeans
 
-spark = SparkSession \
-    .builder \
-    .master("local[*]") \
-    .appName("COVID Analytics") \
-    .getOrCreate()
-
-spark.sparkContext.setLogLevel('WARN')
-
-path = sys.argv[0]
-path = path[0:path.rfind('/')]
-
-
 def get_df():
 	
 	file_url = 'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv'
@@ -46,8 +34,8 @@ def get_df():
 	window_spec = Window.partitionBy("country", "province").orderBy("date")
 	input_df = input_df.withColumn("daily_cases", input_df.cases - when(F.lag(input_df.cases).over(window_spec).isNull(),input_df.cases)\
 				                                       .otherwise(F.lag(input_df.cases).over(window_spec)))
-	input_df = input_df.withColumn('province',coalesce('province','country'))
-	input_df = input_df.withColumn("week", weekofyear(input_df.date))\
+	input_df = input_df.withColumn('province',coalesce('province','country'))\
+			   .withColumn("week", weekofyear(input_df.date))\
 	                   .withColumn("day", dayofweek(input_df.date))\
 	                   .withColumn("day_of_month", dayofmonth(input_df.date))\
 	                   .withColumn('month', month(input_df.date))\
@@ -73,17 +61,18 @@ def find_monthly_avg_cases(df):
     coal_df = coal_df.withColumn('days_in_month', count_udf(F.col('daily_cases')))
     coal_df = coal_df.withColumn('daily_cases', explode(coal_df.daily_cases))
     
-    window1 = Window.partitionBy('country', 'province', 'month', 'year')\
-	            .orderBy('country', 'province', 'month', 'year')
-    grouped_df = coal_df.groupBy('country', 'province', 'month', 'year', 'days_in_month')\
+    window1 = Window.partitionBy('country', 'province', 'year', 'month')\
+	            .orderBy('country', 'province', 'year', 'month')
+    grouped_df = coal_df.groupBy('country', 'province', 'year', 'month', 'days_in_month')\
                         .agg(sum('daily_cases').alias('sum1'))
-    final_df = grouped_df.groupBy('country', 'month', 'year', 'days_in_month')\
+    final_df = grouped_df.groupBy('country', 'year', 'month', 'days_in_month')\
 	                 .agg(sum('sum1').alias('total_monthly_cases'))
-    final_df = final_df.withColumn('daily_avg_per_month', col('total_monthly_cases') / col('days_in_month'))\
-                       .select('country', 'month', 'year', 'total_monthly_cases', 'daily_avg_per_month')
     
-    final_df = final_df.drop('total_monthly_cases').withColumn('daily_avg_per_month', F.round(final_df.daily_avg_per_month, 2))
-    final_df = final_df.orderBy('country', 'month', 'year')
+    final_df = final_df.withColumn('daily_avg_per_month', col('total_monthly_cases') / col('days_in_month'))\
+                       .select('country', 'year', 'month', 'daily_avg_per_month')\
+		       .withColumn('daily_avg_per_month', F.round(final_df.daily_avg_per_month, 2))\
+		       .orderBy('country', 'year', 'month')
+
     final_df.repartition(1).write.option("header", "true").csv(path + '/output/monthly_avg_cases')
 
 def count_rows(input):
@@ -96,7 +85,8 @@ def get_slope(x,y,order=1):
 
 def get_stats_continents(df):
 
-	week_start_end_df = df.groupBy('week','year').agg(max('date').alias('weekend'),min('date').alias('weekstart'))
+	week_start_end_df = df.groupBy('week','year')\
+			      .agg(max('date').alias('weekend'),min('date').alias('weekstart'))
 	week_start_end_df = week_start_end_df.withColumn('weeks', concat(week_start_end_df.weekstart, lit(' - '), week_start_end_df.weekend))
 
 	get_slope_udf = F.udf(get_slope, returnType=DoubleType())
@@ -122,9 +112,13 @@ def get_stats_continents(df):
 	stats_df = stats_df.groupBy('continent','week', 'year')\
 			   .agg(avg('daily_cases').alias('average'), stddev('daily_cases').alias('deviation'), min('daily_cases').alias('minimum'), max('daily_cases').alias('maximum'))
 
-	stats_df = stats_df.withColumn('average',F.round(stats_df.average, 2)).withColumn('deviation',F.round(stats_df.deviation, 2)).withColumn('minimum',F.round(stats_df.minimum, 0).cast('integer')).withColumn('maximum',F.round(stats_df.maximum, 0).cast('integer'))
+	stats_df = stats_df.withColumn('average',F.round(stats_df.average, 2))\
+			   .withColumn('deviation',F.round(stats_df.deviation, 2))\
+			   .withColumn('minimum',F.round(stats_df.minimum, 0).cast('integer'))\
+			   .withColumn('maximum',F.round(stats_df.maximum, 0).cast('integer'))
 	
-	stats_df = stats_df.join(week_start_end_df, on=['week','year'], how='inner').select(stats_df['*'], week_start_end_df.weeks)
+	stats_df = stats_df.join(week_start_end_df, on=['week','year'], how='inner')\
+			   .select(stats_df['*'], week_start_end_df.weeks)
     
 	stats_df.drop('week','year').repartition(1).write.option("header", "true").csv(path + '/output/continent_weekly_stats')
 
@@ -163,8 +157,6 @@ def cluster_top_provinces(df):
     
     month_year = slope_df.select('month', 'year').dropDuplicates().orderBy('year', 'month').collect()
     
-    #Uncomment below line to run few months and make code faster for debugginhg
-    #month_year = month_year[1:3]
     slope_df.cache()
     slope_df.count()
 
@@ -178,7 +170,6 @@ def cluster_top_provinces(df):
     from pyspark.sql import DataFrame
     clusters = reduce(DataFrame.unionAll, cluster_df_list)
 
-    clusters.show()
     clusters.select('province','month','year','cluster').repartition(1).write.option("header", "true").csv(path + '/output/clusters_monthly')
 
 def kmeans(df):
@@ -196,13 +187,27 @@ def kmeans(df):
 
     return predictions
 
-df = get_df()
-df.cache()
-df.count()
+def main():
+	spark = SparkSession \
+    		.builder \
+    		.master("local[*]") \
+    		.appName("COVID Analytics") \
+    		.getOrCreate()
 
-monthly_average = find_monthly_avg_cases(df)
-continents_stats = get_stats_continents(df)
-cluster_top_provinces = cluster_top_provinces(df)
+	spark.sparkContext.setLogLevel('WARN')
 
+	path = sys.argv[0]
+	path = path[0:path.rfind('/')]
+	
+	df = get_df()
+	df.cache()
+	df.count()
 
-spark.stop()
+	monthly_average = find_monthly_avg_cases(df)
+	continents_stats = get_stats_continents(df)
+	cluster_top_provinces = cluster_top_provinces(df)
+
+	spark.stop()
+
+if __name__ == "__main__":
+    main()
